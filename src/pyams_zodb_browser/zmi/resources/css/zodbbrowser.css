@@ -1,0 +1,258 @@
+div.zodbbrowser {
+  color: black;
+  background-color: white;
+  border: 1px solid #00cc33;
+  min-width: 600px;
+  margin-top: 5px;
+  font-size: 12px;
+  font-weight: normal;
+}
+
+div.zodbbrowser > div {
+  padding: 5px;
+}
+
+div.heading {
+  background-color: #aaffaa;
+  border-bottom: 1px solid #00cc33;
+  padding: 5px;
+}
+
+div.heading h1 {
+  font-size: 16px;
+  color: #0033cc;
+  margin: 0;
+  margin-right: 4px;
+}
+div.heading h1 a:link,
+div.heading h1 a:visited {
+  color: #0033cc;
+  text-decoration: none;
+}
+div.heading h1 a:hover,
+div.heading h1 a:active {
+  color: white;
+}
+
+#path {
+  display: block;
+  border: 1px solid #afa;
+  padding: 1px 2px;
+}
+
+#path:hover {
+  border: 1px solid #00cc33;
+  cursor: default;
+}
+
+input#gotoInput {
+  display: block;
+  width: 100%;
+  border: 1px solid #00cc33;
+  background: white;
+  color: black;
+  font-size: 16px;
+  margin: 0;
+  padding: 1px;
+  font-family: Tahoma, Verdana, sans-serif;
+  font-weight: bold;
+}
+
+#pathError {
+  display: block;
+  font-size: 14px;
+  color: black;
+  font-weight: normal;
+  margin: 6px;
+}
+
+div.zodbbrowser .pickleSize {
+  float: right;
+}
+
+div.zodbbrowser .pickleSize,
+div.zodbbrowser h2 {
+  font-size: 14px;
+  color: black;
+  margin: 2px;
+  font-weight: normal;
+}
+
+div.zodbbrowser h3 {
+  font-size: 14px;
+  color: orange;
+  margin: 2px;
+}
+
+h3.expander {
+  cursor: default;
+  padding: 1px;
+}
+
+h3.expander:hover {
+  background: #f8fff8;
+}
+
+h5.expander {
+  cursor: default;
+  padding: 1px;
+}
+
+h5.expander:hover {
+  background: #f8fff8;
+}
+
+
+div.transaction {
+  margin: 0;
+  padding-bottom: 1em;
+}
+
+h4.transaction {
+  margin: 0;
+  font-size: 14px;
+  font-weight: bold;
+  color: black;
+}
+
+h4.transaction.paging {
+  text-align: right;
+}
+
+h4.transaction a.title:link,
+h4.transaction a.title:visited {
+  display: block;
+  color: black;
+  text-decoration: none;
+  padding: 2px;
+}
+h4.transaction a.title:hover,
+h4.transaction a.title:active {
+  color: #760;
+  background: #ffa;
+}
+
+h4.transaction a.subtitle {
+  float: right;
+  padding: 2px;
+  color: #003344;
+  font-size: 12px;
+  font-weight: normal;
+}
+
+div.transaction div.toolbox {
+  float: right;
+  padding: 4px;
+}
+
+div.transaction div.toolbox {
+  display: none;
+}
+
+div.transaction:hover div.toolbox {
+  display: block;
+}
+
+div.zodbbrowser .truncated {
+  background: #f44;
+  color: white;
+  margin: 2px;
+  padding: 0 1px;
+  border-radius: 2px;
+  -moz-border-radius: 2px;
+  cursor: pointer;
+}
+
+span.struct {
+  display: inline-block;
+  vertical-align: text-top;
+}
+
+a.objlink {
+  display: inline-block;
+  vertical-align: text-top;
+}
+
+a.objlink:hover,
+a.objlink:active {
+  background: #aaf;
+  color: white;
+  text-decoration: none;
+}
+
+.tid-info {
+  color: #141;
+  margin-left: 2em;
+  padding: 1px;
+  background: #ffa;
+  border-bottom: 1px solid #fe0;
+  border-top: 1px solid #fe0;
+  border-left: 1px solid #fe0;
+  border-right: 1px solid #fe0;
+}
+
+div.error,
+div.diff {
+  padding: 4px;
+  margin-left: 2em;
+  margin-bottom: 0;
+}
+
+div.diff ol {
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.removed {
+  text-decoration: line-through;
+  color: #400;
+}
+
+.added {
+  color: #040;
+}
+
+div.filtered {
+  margin-left: 2em;
+  padding-left: 4px;
+  font-size: 12px;
+  color: #444;
+}
+
+div.buttons {
+  padding: 4px;
+}
+a.jsbutton:link,
+a.jsbutton:visited {
+  color: green;
+  padding: 1px 4px;
+}
+
+div.history {
+}
+
+div.current {
+  background: #ffa;
+  border-bottom: 1px solid #fe0;
+  border-top: 1px solid #fe0;
+}
+div.latest {
+  background: #ffa;
+  border-top: 1px solid #fe0;
+  margin-bottom: 0;
+}
+div.focus {
+  background: #fca;
+  border-bottom: 1px solid #f80;
+  border-top: 1px solid #f80;
+}
+div#confirmation {
+  margin-left: 2em;
+  margin-top: 1em;
+  font-weight: bold;
+}
+div#confirmation div.message {
+  margin-bottom: 1ex;
+}

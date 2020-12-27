@@ -1,0 +1,150 @@
+<div class="zodbbrowser"
+	 tal:define="js tales:resource_path('pyams_zodb_browser.zmi:zodbbrowser');
+				 css tales:resource_path('pyams_zodb_browser.zmi:zodbbrowser_css');"
+	 data-ams-modules='{"zodbbrowser": "${js}"}'
+	 data-ams-zodbbrowser-css="${css}">
+	<div class="heading">
+		<h1 id="path">
+			<span class="breadcrumbs">${structure:view.get_breadcrumbs_html()}</span>
+		</h1>
+
+		<h1 id="goto" style="display:none">
+			<input type="text" class="goto" id="gotoInput" name="goto"
+				   value="${view.get_path()}" />
+		</h1>
+		<span id="pathError" style="display:none"></span>
+		<span class="pickleSize"> ${view.get_pickle_size()} bytes pickled</span>
+
+		<h2 class="type">${view.get_object_type()}</h2>
+
+		<div class="tid-info" tal:condition="not:view.latest">
+			at <a href="#zodbbrowser_history?tid=${view.get_state_tid()}">
+				${view.get_state_tid_nice()}
+			</a>
+			(last change before or at ${view.get_requested_tid_nice()})
+		</div>
+	</div>
+
+	<div class="attributes"
+		 tal:define="attributes view.list_attributes();
+					 error view.state.get_error()"
+		 tal:condition="attributes is not None or error">
+		<h3 class="expander" data-ams-click-handler="MyAMS.zodbbrowser.collapseOrExpand">
+			<img src="/--static--/pyams_zodb_browser/img/collapse.png"
+				 alt="collapse" />&nbsp;Attributes
+		</h3>
+
+		<div class="collapsible">
+			<tal:if condition="error">
+				<div class="error" tal:condition="error">
+					Could not load the object:
+					${error}
+				</div>
+			</tal:if>
+			<tal:if condition="not:attributes">
+				<span tal:condition="not:error" class="empty">There are none.</span>
+			</tal:if>
+			<tal:if condition="attributes">
+				<tal:loop repeat="attr attributes">
+					<input type="checkbox" class="filter" checked="checked"
+						   name="${attr.name}"
+						   onchange="MyAMS.zodbbrowser.filterHistory()" />
+					<span class="attr">
+						<strong>${attr.name}</strong>:
+						${structure:attr.rendered_value()}
+					</span>
+					<br />
+				</tal:loop>
+				<div class="buttons">
+					<a class="jsbutton"
+					   href="javascript:MyAMS.zodbbrowser.filterAll()">show all</a>
+					<a class="jsbutton"
+					   href="javascript:MyAMS.zodbbrowser.filterNone()">hide all</a>
+				</div>
+			</tal:if>
+		</div>
+	</div>
+
+	<div class="items"
+		 tal:define="items view.list_items()"
+		 tal:condition="items is not None">
+		<h3 class="expander" data-ams-click-handler="MyAMS.zodbbrowser.collapseOrExpand">
+			<img src="/--static--/pyams_zodb_browser/img/collapse.png"
+				 alt="collapse" />&nbsp;Items (${len(items)})
+		</h3>
+
+		<div class="collapsible">
+			<tal:if condition="not:items">
+				<span class="empty">There are none.</span>
+			</tal:if>
+			<tal:loop repeat="item items">
+				<strong>${item.name}</strong>:
+				${structure:item.rendered_value()}
+				<br />
+			</tal:loop>
+		</div>
+	</div>
+
+	<div class="history"
+		 tal:define="history view.list_history()"
+		 tal:condition="history">
+		<h3 class="expander" data-ams-click-handler="MyAMS.zodbbrowser.collapseOrExpand">
+			<img src="/--static--/pyams_zodb_browser/img/collapse.png"
+				 alt="collapse" />&nbsp;History
+		</h3>
+
+		<div class="collapsible">
+			<div class="${view.get_requested_tid() and 'none' or 'latest'}">
+				<h4 class="transaction">
+					<a class="title"
+					   href="#zodbbrowser?oid=${view.get_object_id_hex()}">Latest</a>
+				</h4>
+			</div>
+			<div tal:repeat="history history"
+				 class="transaction ${(history['current'] or repeat['history'].start()
+									  and not view.get_requested_tid()) and 'current' or ''}">
+				<h4 class="transaction"
+					id="tid${history.utid}">
+					<a class="subtitle"
+					   href="#zodbbrowser_history?tid=${history.utid}">view transaction	record</a>
+					<a class="title"
+					   href="${history.href}">
+						#${history.index}:
+						<span class="timestamp" title="UTC">${history.utc_timestamp}"</span>
+						<span class="user"
+							  title="user from site ${history.user_location}">
+							${history.user_id}
+						</span>
+						<span class="location"
+							  title="request type ${history.request_type | nothing}">
+							${history.location | nothing}
+						</span>
+						<span class="description">${history.description}</span>
+					</a>
+				</h4>
+
+				<div class="toolbox"
+					 tal:condition="not repeat['history'].start() and not view.readonly">
+					<form action="zodbbrowser" class="rollback" method="post" data-async>
+						<input type="hidden" name="oid" value="${view.get_object_id()}" />
+						<input type="hidden" name="tid" value="${view.get_requested_tid()}" />
+						<input type="hidden" name="rtid" value="${history.utid}" />
+						<input type="hidden" name="confirmed" value="0" />
+						<input type="hidden" name="ROLLBACK" value="" />
+						<input type="submit" class="rollbackbtn" value="Revert to this state" />
+					</form>
+				</div>
+				<div class="error"
+					 tal:condition="history.error">
+					Could not load historical state:
+					${history.error}
+				</div>
+				${structure:history.diff}
+			</div>
+		</div>
+	</div>
+</div>
+<img id="collapseImg" style="display:none" alt=""
+     src="/--static--/pyams_zodb_browser/img/collapse.png" />
+<img id="expandImg" style="display:none" alt=""
+     src="/--static--/pyams_zodb_browser/img/expand.png" />

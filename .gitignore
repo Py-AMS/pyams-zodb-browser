@@ -1,0 +1,11 @@
+
+!/.installed.cfg
+!/eggs/
+!/bin/
+!/parts/
+!/develop-eggs/
+!/src/pyams_zodb_browser/**/__pycache__/
+!/src/pyams_zodb_browser.egg-info/
+/.coverage
+/coverage.xml
+/.scannerwork/

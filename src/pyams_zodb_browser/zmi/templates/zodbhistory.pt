@@ -1,0 +1,92 @@
+<div class="zodbbrowser"
+	 tal:define="js tales:resource_path('pyams_zodb_browser.zmi:zodbbrowser');
+				 css tales:resource_path('pyams_zodb_browser.zmi:zodbbrowser_css');"
+	 data-ams-modules='{"zodbbrowser": "${js}"}'
+	 data-ams-zodbbrowser-css="${css}">
+	<div class="heading">
+		<h1 id="path">
+			ZODB transactions
+		</h1>
+
+		<h1 id="goto" style="display:none">
+			<input type="hidden" id="api" name="api" value="#zodbbrowser_path_to_oid" />
+			<input type="text" class="goto" id="gotoInput" name="goto" />
+		</h1>
+		<span id="pathError" style="display:none"></span>
+	</div>
+
+	<div class="history">
+		<div tal:condition="view.page > 0">
+			<h4 class="paging transaction"
+				tal:define="prev_page view.page - 1">
+				<a class="title"
+				   href="#zodbbrowser_history?page=${prev_page}">Newer</a>
+			</h4>
+		</div>
+		<div tal:condition="view.page == 0"
+			 class="${'tid' in request.params and 'none' or 'latest'}">
+			<h4 class="transaction">
+				<a class="title" href="#zodbbrowser_history">Latest</a>
+			</h4>
+		</div>
+		<div tal:repeat="history view.list_history()"
+			 class="transaction ${history['current'] and 'current' or ''}">
+			<h4 class="transaction"
+				id="tid${history.utid}">
+				<a class="title"
+				   href="${history.href}">
+					#${history.index}:
+					<span class="timestamp" title="UTC">
+						${history.utc_timestamp}"
+					</span>
+					<span class="user"
+						  title="user from site ${history.user_location}">
+						${history.user_id}
+					<span class="location"
+						  title="request type ${history.request_type | nothing}">
+						${history.location | nothing}
+					</span>
+					<span class="description">
+						${history.description}
+					</span>
+				</a>
+			</h4>
+
+			<div class="diff">
+				<h5 class="expander"
+					data-ams-click-handler="MyAMS.zodbbrowser.collapseOrExpand">
+					<img src="/--static--/pyams_zodb_browser/img/collapse.png"
+						 alt="collapse"
+						 tal:condition="not:history.hidden"
+							/><img src="/--static--/pyams_zodb_browser/img/expand.png"
+								   alt="expand"
+								   tal:condition="history.hidden"
+						/>&nbsp;${history.summary}
+				</h5>
+
+				<div class="collapsible"
+					 style="${history['hidden'] and 'display: none' or None}">
+					<ol>
+						<li tal:repeat="obj history.objects">
+							<a href="${obj.url}">${obj.path}</a>
+							${obj.class_repr}
+							<a href="${obj.url}">${structure:obj.repr}</a>
+						</li>
+					</ol>
+				</div>
+			</div>
+		</div>
+		<div tal:condition="view.page < view.last_page">
+			<h4 class="paging transaction"
+				tal:define="next_page view.page + 1">
+				<a class="title"
+				   href="#zodbbrowser_history?page=${next_page}">Older</a>
+			</h4>
+		</div>
+	</div>
+
+</div>
+<img id="collapseImg" style="display:none" alt=""
+     src="/--static--/pyams_zodb_browser/img/collapse.png" />
+<img id="expandImg" style="display:none" alt=""
+     src="/--static--/pyams_zodb_browser/img/expand.png" />
