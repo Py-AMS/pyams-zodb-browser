@@ -1,6 +1,10 @@
 Changelog
 =========
 
+1.1.0
+-----
+ - removed support for Python < 3.7
+
 1.0.1
 -----
  - updated Gitlab-CI configuration
