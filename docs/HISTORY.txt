@@ -1,6 +1,10 @@
 Changelog
 =========
 
+1.2.0
+-----
+ - ZODB browser script refactoring
+
 1.1.0
 -----
  - removed support for Python < 3.7
