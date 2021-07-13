@@ -3,10 +3,12 @@
 'use strict';
 
 
-var $ = MyAMS.$;
+if (window.$ === undefined) {
+	window.$ = MyAMS.$;
+}
 
 
-var zodbbrowser = {
+const zodbbrowser = {
 
 	filterAll: function() {
 		$('.filter').attr('checked', true);
@@ -19,25 +21,26 @@ var zodbbrowser = {
 	},
 
 	filterHistory: (showAll) => {
-		var
+		const
 			transactions = $('div.transaction'),
 			filters = $('.filter'),
 			filterMap = Array(),
 			MAPPING_PREFIX = "map";
 
-		for (var i = 0; i < filters.length; i++) {
-			var filter = filters[i];
+		for (let i = 0; i < filters.length; i++) {
+			const filter = filters[i];
 			if (filter.checked) {
 				filterMap[MAPPING_PREFIX + filter.name] = filter.checked;
 			}
 		}
 
-		for (i = 0; i < transactions.length; i++) {
-			var transaction = transactions[i];
-			var diffs = $(transaction).children('div.diff').children('div.diffitem');
-			var n_hidden = 0;
-			for (var j = 0; j < diffs.length; j++) {
-				var id = $($(diffs[j]).children()[0]).text();
+		for (let i = 0; i < transactions.length; i++) {
+			const
+				transaction = transactions[i],
+				diffs = $(transaction).children('div.diff').children('div.diffitem');
+			let n_hidden = 0;
+			for (let j = 0; j < diffs.length; j++) {
+				const id = $($(diffs[j]).children()[0]).text();
 				if (MAPPING_PREFIX + id in filterMap || showAll) {
 					$(diffs[j]).show();
 				} else {
@@ -45,7 +48,7 @@ var zodbbrowser = {
 					n_hidden += 1;
 				}
 			}
-			var hidden_text = null;
+			let hidden_text = null;
 			if (n_hidden === 1) {
 				hidden_text = '1 item hidden';
 			} else if (n_hidden) {
@@ -61,9 +64,10 @@ var zodbbrowser = {
 	collapseOrExpand: function (event) {
 		// this is <div class="extender">
 		// the following element is <div class="collapsible">
-		var target = $(event.currentTarget);
-		var content = target.next();
-		var icon = target.children('img');
+		const
+			target = $(event.currentTarget),
+			content = target.next(),
+			icon = target.children('img');
 		if (content.is(':hidden')) {
 			$(icon).attr('src', $('#collapseImg').attr('src'));
 			content.slideDown();
@@ -75,12 +79,13 @@ var zodbbrowser = {
 
 	hideItemsIfTooMany: function () {
 		$('.items').each(function () {
-			var expander = $(this).children('.expander')[0];
-			var content = $(this).children('.collapsible')[0];
+			const
+				expander = $(this).children('.expander')[0],
+				content = $(this).children('.collapsible')[0];
 			// items are formatted using <br /> so the heuristic is very
 			// approximate.
 			if (content.childNodes.length > 100 && !$(content).is(':hidden')) {
-				var icon = $(expander).children('img');
+				const icon = $(expander).children('img');
 				$(icon).attr('src', $('#expandImg').attr('src'));
 				$(content).hide();
 			}
@@ -105,7 +110,7 @@ var zodbbrowser = {
 	},
 
 	ajaxErrorHandler: function (XMLHttpRequest, textStatus, errorThrown) {
-		var errorMessage = "";
+		let errorMessage = "";
 		if (textStatus === "parsererror") {
 			errorMessage = "Server returned malformed data";
 		} else if (textStatus === "error") {
@@ -141,8 +146,9 @@ var zodbbrowser = {
 	},
 
 	activateGoTo: function () {
-		var path = $('#gotoInput').val();
-		var api_url = 'zodbbrowser_path_to_oid';
+		const
+			path = $('#gotoInput').val(),
+			api_url = 'zodbbrowser_path_to_oid';
 		$('#pathError').text("Loading...").slideDown();
 		$.ajax({
 			url: api_url,
@@ -164,29 +170,30 @@ var zodbbrowser = {
 		e.preventDefault();
 		zodbbrowser.cancelRollback();
 		$(e.target).hide();
-		var transaction_div = $(e.target).closest('div.transaction');
+		const transaction_div = $(e.target).closest('div.transaction');
 		transaction_div.addClass('focus');
 		$('<div id="confirmation">' +
-		  '<form action="" method="post">' +
-		  '<div class="message">' +
-		  'This is a dangerous operation that may break data integrity.' +
-		  ' Are you really sure you want to do this?' +
-		  '</div>' +
-		  '<input type="BUTTON" value="Really revert to this state" onclick="zodbbrowser.doRollback()">' +
-		  '<input type="BUTTON" value="Cancel" onclick="zodbbrowser.cancelRollback()">' +
-		  '</form>' +
+		    '<form action="" method="post">' +
+		      '<div class="message">' +
+		        'This is a dangerous operation that may break data integrity.' +
+		        ' Are you really sure you want to do this?' +
+		      '</div>' +
+		      '<input type="BUTTON" value="Really revert to this state" onclick="zodbbrowser.doRollback()">' +
+		      '<input type="BUTTON" value="Cancel" onclick="zodbbrowser.cancelRollback()">' +
+		    '</form>' +
 		  '</div>').appendTo(transaction_div);
 	},
 
 	doRollback: function () {
-		var transaction_div = $('#confirmation').closest('div.transaction');
-		var rollback_form = transaction_div.find('form.rollback');
+		const
+			transaction_div = $('#confirmation').closest('div.transaction'),
+			rollback_form = transaction_div.find('form.rollback');
 		rollback_form.find('input[name="confirmed"]').val('1');
 		rollback_form.submit();
 	},
 
 	initElement: function(element) {
-		var css = $('.zodbbrowser').data('ams-zodbbrowser-css');
+		const css = $('.zodbbrowser').data('ams-zodbbrowser-css');
 		MyAMS.core.getCSS(css, 'zodbbrowser').then(() => {
 			zodbbrowser.hideItemsIfTooMany();
 			$('#path a', element).click(function(event) {
@@ -215,8 +222,9 @@ var zodbbrowser = {
 			$('input.rollbackbtn', element).click(zodbbrowser.pressRollback);
 			$('span.truncated', element).click(function(event) {
 				event.preventDefault();
-				var placeholder = $(this);
-				var id = placeholder.attr('id');
+				const
+					placeholder = $(this),
+					id = placeholder.attr('id');
 				$.ajax({
 					url: 'zodbbrowser_truncated', data: 'id=' + id,
 					success: function(data, status) {
