@@ -1,8 +1,12 @@
 <div class="zodbbrowser"
 	 tal:define="js tales:resource_path('pyams_zodb_browser.zmi:zodbbrowser');
 				 css tales:resource_path('pyams_zodb_browser.zmi:zodbbrowser_css');"
-	 data-ams-modules='{"zodbbrowser": "${js}"}'
-	 data-ams-zodbbrowser-css="${css}">
+	 data-ams-modules='{
+	 		"zodbbrowser": {
+	 			"src": "${js}",
+	 			"css": "${css}"
+	 		}
+	 	 }'>
 	<div class="heading">
 		<h1 id="path">
 			<span class="breadcrumbs">${structure:view.get_breadcrumbs_html()}</span>
