@@ -21,7 +21,7 @@ before_script:
 bootstrap:
     stage: .pre
     script:
-        - pip install pip==21.0.1 setuptools==50.3.2 zc.buildout zc.recipe.egg cffi importlib_metadata
+        - pip install pip==21.0.1 setuptools==50.3.2 zc.buildout zc.recipe.egg
         - buildout
 
 test-3.7:
