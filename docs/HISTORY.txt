@@ -1,6 +1,14 @@
 Changelog
 =========
 
+1.2.3
+-----
+ - updated setup
+
+1.2.2
+-----
+ - updated buildout and Gitlab-CI configuration
+
 1.2.1
 -----
  - updated MyAMS modules registration
