@@ -21,13 +21,13 @@ before_script:
 bootstrap:
     stage: .pre
     script:
-        - pip install pip==21.0.1 setuptools==50.3.2 zc.buildout zc.recipe.egg
+        - pip install pip==21.0.1 setuptools==50.3.2 zc.buildout zc.recipe.egg cffi importlib_metadata
         - buildout
 
 test-3.7:
     stage: test
     script:
-        - pip install anybadge coverage cffi
+        - pip install anybadge coverage
         - mkdir ./coverage
         - coverage erase
         - coverage run ./bin/test | tee ./coverage/coverage.log
