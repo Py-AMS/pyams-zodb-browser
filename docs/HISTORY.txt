@@ -1,6 +1,10 @@
 Changelog
 =========
 
+1.2.1
+-----
+ - updated MyAMS modules registration
+
 1.2.0
 -----
  - ZODB browser script refactoring
