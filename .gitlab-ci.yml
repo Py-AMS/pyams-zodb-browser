@@ -27,7 +27,7 @@ bootstrap:
 test-3.7:
     stage: test
     script:
-        - pip install anybadge coverage
+        - pip install anybadge coverage cffi
         - mkdir ./coverage
         - coverage erase
         - coverage run ./bin/test | tee ./coverage/coverage.log
