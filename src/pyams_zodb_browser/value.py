@@ -18,6 +18,7 @@ import collections
 import itertools
 import logging
 import re
+from functools import partial
 from html import escape
 
 from ZODB.utils import oid_repr, u64
@@ -29,7 +30,20 @@ from zope.interface import Interface
 from zope.interface.declarations import ProvidesClass
 
 from pyams_utils.adapter import adapter_config
+from pyams_zodb_browser.history import get_object_history
 from pyams_zodb_browser.interfaces import IObjectHistory, IValueRenderer
+
+
+# Persistent has a __repr__ now that shows the OID, but it's shown poorly
+# (as a Python string full of backslash escapes) and includes lots of
+# irrelevant details (in-memory object address, repr of the Connection object).
+CLASSES_WITH_BAD_REPR = (object, Persistent)
+try:
+    from BTrees._base import Bucket, Set, Tree, TreeSet
+except ImportError:
+    pass
+else:
+    CLASSES_WITH_BAD_REPR += (Bucket, Set, Tree, TreeSet)
 
 
 __docformat__ = 'restructuredtext'
@@ -41,7 +55,7 @@ log = logging.getLogger(__name__)
 MAX_CACHE_SIZE = 1000
 TRUNCATIONS = {}
 TRUNCATIONS_IN_ORDER = collections.deque()
-next_id = itertools.count(1).__next__  # pylint: disable=invalid-name
+next_id = partial(next, itertools.count(1))
 
 
 def reset_truncations():  # for tests only!
@@ -66,7 +80,8 @@ def truncate(text):
     return id
 
 
-@adapter_config(required=Interface, provides=IValueRenderer)
+@adapter_config(required=Interface,
+                provides=IValueRenderer)
 class GenericValue:
     """Default value renderer.
 
@@ -76,15 +91,29 @@ class GenericValue:
     def __init__(self, context):
         self.context = context
 
+    if hasattr(object.__repr__, '__func__'):  # pragma: nocover
+        # PyPy
+        def _same_method(self, a, b):
+            return getattr(a, '__func__', None) is b.__func__
+    else:
+        # CPython
+        def _same_method(self, a, b):
+            return a is b
+
+    def _has_no_repr(self, obj):
+        obj_repr = getattr(obj.__class__, '__repr__', None)
+        return any(self._same_method(obj_repr, cls.__repr__)
+                   for cls in CLASSES_WITH_BAD_REPR)
+
     def _repr(self):
         # hook for subclasses
-        if getattr(self.context.__class__, '__repr__', None) is object.__repr__:
+        if self._has_no_repr(self.context):
             # Special-case objects with the default __repr__ (LP#1087138)
             if isinstance(self.context, Persistent):
                 return '<%s.%s with oid %s>' % (
                     self.context.__class__.__module__,
                     self.context.__class__.__name__,
-                    oid_repr(self.context._p_oid))  # pylint: disable=protected-access
+                    oid_repr(self.context._p_oid))
         try:
             return repr(self.context)
         except Exception:  # pylint: disable=broad-except
@@ -132,7 +161,8 @@ def join_with_commas(html, open, close):  # pylint: disable=redefined-builtin
     return prefix + '<br />'.join(html) + suffix
 
 
-@adapter_config(required=str, provides=IValueRenderer)
+@adapter_config(required=str,
+                provides=IValueRenderer)
 class StringValue(GenericValue):
     """String renderer."""
 
@@ -165,7 +195,8 @@ class StringValue(GenericValue):
                 + "'</span>")
 
 
-@adapter_config(required=tuple, provides=IValueRenderer)
+@adapter_config(required=tuple,
+                provides=IValueRenderer)
 class TupleValue:
     """Tuple renderer."""
 
@@ -244,7 +275,7 @@ class PersistentValue:
         if tid is not None:
             url += "&tid=%d" % u64(tid)
             try:
-                oldstate = IObjectHistory(self.context).load_state(tid)  # pylint: disable=assignment-from-no-return
+                oldstate = get_object_history(self.context).load_state(tid)  # pylint: disable=assignment-from-no-return
                 clone = self.context.__class__.__new__(self.context.__class__)
                 clone.__setstate__(oldstate)
                 clone._p_oid = self.context._p_oid  # pylint: disable=protected-access

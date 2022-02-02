@@ -16,8 +16,14 @@
 
 __docformat__ = 'restructuredtext'
 
+import json
+import logging
+import pickletools
+import threading
 import time
+import traceback
 from html import escape
+from io import BytesIO, StringIO
 
 import transaction
 from ZODB.POSException import POSKeyError
@@ -42,13 +48,16 @@ from pyams_zmi.interfaces import IAdminLayer
 from pyams_zmi.interfaces.viewlet import IControlPanelMenu
 from pyams_zmi.zmi.viewlet.menu import NavigationMenuItem
 from pyams_zodb_browser.diff import compare_dicts_html
-from pyams_zodb_browser.history import ZODBObjectHistory
+from pyams_zodb_browser.history import ZODBObjectHistory, get_object_history
 from pyams_zodb_browser.interfaces import IDatabaseHistory, IValueRenderer
 from pyams_zodb_browser.state import ZODBObjectState
+from pyams_zodb_browser.value import TRUNCATIONS, prune_truncations
 
 
 from pyams_zodb_browser import _
-from pyams_zodb_browser.value import TRUNCATIONS, prune_truncations
+
+
+LOGGER = logging.getLogger('PyAMS (zodbbrowser)')
 
 
 def get_object_type(obj):
@@ -95,6 +104,32 @@ def get_object_path(obj, tid):
     return ''.join(path[::-1])
 
 
+def format_time(seconds):
+    """Time formatter"""
+    min, sec = divmod(seconds, 60)
+    if min > 0:
+        return '%dm %.3fs' % (int(min), sec)
+    return '%.3fs' % seconds
+
+
+def format_size(size):
+    """Size formatter"""
+    if size is None:
+        return 'n/a bytes'
+    format_string = '%.0f %s'
+    for units in 'bytes', 'KiB', 'MiB', 'GiB':
+        if size < 1024:
+            break
+        size = size / 1024.
+        format_string = '%.1f %s'
+    return format_string % (size, units)
+
+
+def get_full_request_url(request):
+    """Request URL formatter"""
+    return request.url
+
+
 class ZODBObjectAttribute:
     """Object attributes"""
 
@@ -125,7 +160,8 @@ class ZODBObjectAttribute:
         return not self.__eq__(other)
 
 
-@viewlet_config(name='zodbbrowser.menu', context=Interface, layer=IAdminLayer, 
+@viewlet_config(name='zodbbrowser.menu',
+                context=Interface, layer=IAdminLayer,
                 manager=IControlPanelMenu, weight=999,
                 permission=MANAGE_SYSTEM_PERMISSION)
 class ZODBBrowserMenu(NavigationMenuItem):
@@ -151,10 +187,6 @@ class VeryCarefulView(ContextRequestAdapter):
                 raise Exception("ZODB connection not available for this request")
             return obj._p_jar
 
-    @property
-    def readonly(self):
-        return self.jar.isReadOnly()
-
     def find_closest_persistent(self):
         """Find closest persistent object"""
         obj = self.context
@@ -165,21 +197,61 @@ class VeryCarefulView(ContextRequestAdapter):
                 return None
         return obj
 
+    @property
+    def readonly(self):
+        return self.jar.isReadOnly()
 
-@pagelet_config(name='zodbbrowser', context=Interface, layer=IPyAMSLayer, 
+
+class TimedMixin:
+    """Timed view mixin"""
+
+    _started = _last_mark = None
+
+    def reset_mark(self, message=None):
+        """Reset start mark"""
+        self._started = self._last_mark = time.time()
+        if message:
+            LOGGER.debug('%s %-14s %s' % (self.thread_tag(), '-' * 14, message))
+
+    def time_elapsed(self):
+        """Time elapsed since start"""
+        return time.time() - self._started
+
+    def thread_tag(self):
+        """Thread tag getter"""
+        return '[%s]' % threading.current_thread().name
+
+    def debug_mark(self, mark):
+        """Debugging start mark"""
+        now = time.time()
+        if self._last_mark is None:
+            self._last_mark, interval = now, 0
+        else:
+            self._last_mark, interval = now, now - self._last_mark
+        LOGGER.debug('%s %-14s %s' % (self.thread_tag(), format_time(interval), mark))
+
+    def rendering_time(self):
+        """Rendering time formatter"""
+        return format_time(self.time_elapsed()) + ' |'
+
+
+@pagelet_config(name='zodbbrowser',
+                context=Interface, layer=IPyAMSLayer,
                 permission=MANAGE_SYSTEM_PERMISSION)
 @template_config(template='templates/zodbinfo.pt')
 @implementer(IInnerPage)
-class ZODBInfoView(VeryCarefulView):
+class ZODBInfoView(TimedMixin, VeryCarefulView):
     """ZODB info view"""
 
     def update(self):
-        super(ZODBInfoView, self).update()
+        super().update()
+        self.reset_mark(get_full_request_url(self.request))
         prune_truncations()
         self.obj = self.select_object_to_view()
         # Not using IObjectHistory(self.obj) because LP#1185175
-        self.history = ZODBObjectHistory(self.obj)
+        self.history = get_object_history(self.obj)
         self.latest = True
+        self.debug_mark('- loading object state')
         if self.request.params.get('tid'):
             self.state = ZODBObjectState(self.obj,
                                          p64(int(self.request.params['tid'], 0)),
@@ -193,14 +265,21 @@ class ZODBInfoView(VeryCarefulView):
 
         if 'ROLLBACK' in self.request.params:
             rtid = p64(int(self.request.params['rtid'], 0))
-            self.requestedState = self._tid_to_timestamp(rtid)
+            self.requested_state = self._tid_to_timestamp(rtid)
             if self.request.params.get('confirmed') == '1':
                 self.history.rollback(rtid)
                 transaction.get().note('Rollback to old state %s'
-                                       % self.requestedState)
+                                       % self.requested_state)
                 self.made_changes = True
                 transaction.get().commit()
                 raise self._redirect_to_self()
+
+    def render(self):
+        self.debug_mark('- rendering')
+        try:
+            return super().render()
+        finally:
+            self.debug_mark('- done (%s)' % format_time(self.time_elapsed()))
 
     def _redirect_to_self(self):
         return HTTPFound(self.get_url())
@@ -231,9 +310,7 @@ class ZODBInfoView(VeryCarefulView):
         return obj
 
     def get_requested_tid(self):
-        if 'tid' in self.request.params:
-            return self.request.params['tid']
-        return None
+        return self.request.params.get('tid', None)
 
     def get_requested_tid_nice(self):
         if 'tid' in self.request.params:
@@ -253,7 +330,9 @@ class ZODBInfoView(VeryCarefulView):
         return get_object_type_short(self.obj)
 
     def get_state_tid(self):
-        return u64(self.state.tid)
+        if self.state.tid:
+            return u64(self.state.tid)
+        return None
 
     def get_state_tid_nice(self):
         return self._tid_to_timestamp(self.state.tid)
@@ -270,6 +349,12 @@ class ZODBInfoView(VeryCarefulView):
         except KeyError:
             pass
         return u64(root._p_oid)
+
+    def locate_json(self, path):
+        return json.dumps(self.locate(path))
+
+    def truncated_ajax(self, id):
+        return TRUNCATIONS.get(id)
 
     def locate(self, path):
         not_found = object()  # marker
@@ -341,17 +426,18 @@ class ZODBInfoView(VeryCarefulView):
         return url
 
     def get_breadcrumbs(self):
+        self.debug_mark('- rendering breadcrumbs')
         breadcrumbs = []
         state = self.state
         seen_root = False
         while True:
             url = self.get_url(state.get_object_id())
             if state.is_root():
-                breadcrumbs.append(('/', url))
+                breadcrumbs.append(('/ ', url))
                 seen_root = True
             else:
                 if breadcrumbs:
-                    breadcrumbs.append(('/', None))
+                    breadcrumbs.append((' / ', None))
                 if not state.get_name() and state.get_parent_state() is None:
                     # not using hex() because we don't want L suffixes for
                     # 64-bit values
@@ -362,9 +448,9 @@ class ZODBInfoView(VeryCarefulView):
             if state is None:
                 if not seen_root:
                     url = self.get_url(self.get_root_oid())
-                    breadcrumbs.append(('/', None))
+                    breadcrumbs.append((' / ', None))
                     breadcrumbs.append(('...', None))
-                    breadcrumbs.append(('/', url))
+                    breadcrumbs.append((' / ', url))
                 break
         return breadcrumbs[::-1]
 
@@ -381,7 +467,28 @@ class ZODBInfoView(VeryCarefulView):
                 html.append(escape(name))
         return ''.join(html)
 
+    def get_disassembled_pickle_data(self):
+        self.debug_mark('- rendering pickle')
+        if not self.state.pickled_state:
+            return ''
+        pickle = BytesIO(self.state.pickled_state)
+        out = StringIO()
+        memo = {}
+        # 1st pickle: the class
+        try:
+            pickletools.dis(pickle, out, memo)
+        except Exception as e:
+            out.write(''.join(traceback.format_exception_only(type(e), e)))
+        # 2st pickle: actual instance data
+        out.write('\n')
+        try:
+            pickletools.dis(pickle, out, memo)
+        except Exception as e:
+            out.write(''.join(traceback.format_exception_only(type(e), e)))
+        return out.getvalue()
+
     def list_attributes(self):
+        self.debug_mark('- rendering attributes')
         attrs = self.state.list_attributes()
         if attrs is None:
             return None
@@ -389,6 +496,7 @@ class ZODBInfoView(VeryCarefulView):
                 for name, value in sorted(attrs)]
 
     def list_items(self):
+        self.debug_mark('- rendering items')
         items = self.state.list_items()
         if items is None:
             return None
@@ -412,9 +520,14 @@ class ZODBInfoView(VeryCarefulView):
 
     def list_history(self):
         """List transactions that modified a persistent object."""
+        if 'nohist' in self.request.params:
+            return []
+
+        self.debug_mark('- rendering history')
         state = self._load_historical_state()
         results = []
         for n, d in enumerate(self.history):
+            self.debug_mark('- rendering history #%s' % n)
             utc_timestamp = str(time.strftime('%Y-%m-%d %H:%M:%S',
                                               time.gmtime(d['time'])))
             local_timestamp = str(time.strftime('%Y-%m-%d %H:%M:%S',
@@ -432,9 +545,11 @@ class ZODBInfoView(VeryCarefulView):
             diff = compare_dicts_html(curState, oldState, d['tid'])
 
             results.append(dict(utid=u64(d['tid']),
-                                href=url, current=current,
+                                href=url,
+                                current=current,
                                 error=state[n]['error'],
-                                diff=diff, user_id=user_id,
+                                diff=diff,
+                                user_id=user_id,
                                 user_location=user_location,
                                 utc_timestamp=utc_timestamp,
                                 local_timestamp=local_timestamp, **d))
@@ -473,22 +588,24 @@ class TruncatedView(ZODBInfoView):
                 permission=MANAGE_SYSTEM_PERMISSION)
 @template_config(template='templates/zodbhistory.pt')
 @implementer(IInnerPage)
-class ZODBHistoryView(VeryCarefulView):
+class ZODBHistoryView(TimedMixin, VeryCarefulView):
     """Zodb history view"""
 
     page_size = 5
 
     def update(self):
-        super(ZODBHistoryView, self).update()
+        super().update()
         prune_truncations()
         params = self.request.params
         if 'page_size' in params:
             self.page_size = max(1, int(params['page_size']))
+        self.debug_mark('Loading history')
         self.history = IDatabaseHistory(self.jar)
         if 'page' in params:
             self.page = int(params['page'])
         elif 'tid' in params:
             tid = int(params['tid'], 0)
+            self.debug_mark('- finding transaction page')
             self.page = self.find_page(p64(tid))
         else:
             self.page = 0
@@ -497,6 +614,13 @@ class ZODBHistoryView(VeryCarefulView):
             self.page = self.last_page
         self.last_idx = max(0, len(self.history) - self.page * self.page_size)
         self.first_idx = max(0, self.last_idx - self.page_size)
+
+    def render(self):
+        self.reset_mark(get_full_request_url(self.request))
+        try:
+            return super().render()
+        finally:
+            self.debug_mark('- done (%s)' % format_time(self.time_elapsed()))
 
     def get_url(self, tid=None):
         url = "#zodbbrowser_history"
@@ -515,6 +639,7 @@ class ZODBHistoryView(VeryCarefulView):
             return (len(self.history) - pos - 1) // self.page_size
 
     def list_history(self):
+        self.debug_mark('- listing history')
         if 'tid' in self.request.params:
             requested_tid = p64(int(self.request.params['tid'], 0))
         else:
@@ -531,17 +656,31 @@ class ZODBHistoryView(VeryCarefulView):
             except ValueError:
                 user_location = None
                 user_id = d.user
+            description = d.description
             try:
                 size = d._tend - d._tpos
             except AttributeError:
                 size = None
+            self.debug_mark('- listing 0x%x (%s)' % (utid, format_size(size)))
             ext = d.extension if isinstance(d.extension, dict) else {}
             objects = []
-            for record in d:
-                obj = self.jar.get(record.oid)
+            for idx, record in enumerate(d):
                 url = "#zodbbrowser?oid=0x%x&tid=0x%x" % (u64(record.oid),
                                                            utid)
-                try:
+                if ('fast' in self.request.params) or \
+                        (self.time_elapsed() > 10
+                         and idx > 10
+                         and 'full' not in self.request.params):
+                    objects.append(dict(
+                        oid=u64(record.oid),
+                        path='0x%x' % u64(record.oid),
+                        oid_repr=oid_repr(record.oid),
+                        class_repr='',
+                        url=url,
+                        repr='(view object)',
+                    ))
+                else:
+                    obj = self.jar.get(record.oid)
                     objects.append(dict(
                         oid=u64(record.oid),
                         path=get_object_path(obj, d.tid),
@@ -550,21 +689,19 @@ class ZODBHistoryView(VeryCarefulView):
                         url=url,
                         repr=IValueRenderer(obj).render(d.tid),
                     ))
-                except KeyError:  # no history
-                    pass
             if len(objects) == 1:
                 summary = '1 object record'
             else:
                 summary = '%d object records' % len(objects)
             if size is not None:
-                summary += ' (%d bytes)' % size
+                summary += ' (%d)' % format_size(size)
             results.append(dict(
                 index=(self.first_idx + n + 1),
                 utc_timestamp=utc_timestamp,
                 local_timestamp=local_timestamp,
                 user_id=user_id,
                 user_location=user_location,
-                description=d.description,
+                description=description,
                 utid=utid,
                 current=(d.tid == requested_tid),
                 href=self.get_url(tid=utid),
@@ -576,4 +713,5 @@ class ZODBHistoryView(VeryCarefulView):
             ))
         if results and not requested_tid and self.page == 0:
             results[-1]['current'] = True
+        self.debug_mark('- back to rendering')
         return results[::-1]

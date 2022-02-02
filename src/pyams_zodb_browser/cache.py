@@ -18,6 +18,7 @@ __docformat__ = 'restructuredtext'
 
 import weakref
 import time
+from contextlib import contextmanager
 
 
 MINUTES = 60
@@ -33,6 +34,15 @@ def expired(cache_dict, cache_for):
     return time.time() > cache_dict['last_update'] + cache_for
 
 
+@contextmanager
+def maybe_closing(thing):
+    """Check for closing thing"""
+    yield thing
+    # FileStorage's FileIterator has a close(), ZEO's TransactionIterator doesn't
+    if hasattr(thing, 'close'):
+        thing.close()
+
+
 def get_storage_tids(storage, cache_for=5 * MINUTES):
     """Storage transactions ids getter"""
     cache_dict = STORAGE_TIDS.setdefault(storage, {})
@@ -41,19 +51,26 @@ def get_storage_tids(storage, cache_for=5 * MINUTES):
             first = cache_dict['tids'][-1]
             last = cache_dict['tids'][-1]
             try:
-                first_record = next(storage.iterator())
-            except StopIteration:
+                with maybe_closing(storage.iterator()) as it:
+                    first_record = next(it)
+            except StopIteration:  # pragma: nocover
+                # I don't think this is possible -- a database always
+                # has at least one transaction.  But, hey, maybe somebody
+                # truncated the file or something?
                 first_record = None
             if first_record and first_record.tid == first:
                 # okay, look for new transactions appended at the end
-                new = [t.tid for t in storage.iterator(start=last)]
+                with maybe_closing(storage.iterator(start=last)) as it:
+                    new = [t.tid for t in it]
                 if new and new[0] == last:
                     del new[0]
                 cache_dict['tids'].extend(new)
             else:
                 # first record changed, we must've packed the DB
-                cache_dict['tids'] = [t.tid for t in storage.iterator()]
+                with maybe_closing(storage.iterator()) as it:
+                    cache_dict['tids'] = [t.tid for t in it]
         else:
-            cache_dict['tids'] = [t.tid for t in storage.iterator()]
+            with maybe_closing(storage.iterator()) as it:
+                cache_dict['tids'] = [t.tid for t in it]
         cache_dict['last_update'] = time.time()
     return cache_dict['tids']

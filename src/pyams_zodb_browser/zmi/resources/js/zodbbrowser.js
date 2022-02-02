@@ -193,44 +193,42 @@ const zodbbrowser = {
 	},
 
 	initElement: function(element) {
-		const css = $('.zodbbrowser').data('ams-zodbbrowser-css');
-		MyAMS.core.getCSS(css, 'zodbbrowser').then(() => {
-			zodbbrowser.hideItemsIfTooMany();
-			$('#path a', element).click(function(event) {
-				event.stopPropagation();
-			});
-			$('#path', element).click(zodbbrowser.showGoTo);
-			$('#gotoInput', element).blur(zodbbrowser.hideGoTo);
-			$('#gotoInput', element).keypress(function(event) {
-				if (event.which === 13) { // enter
-					zodbbrowser.activateGoTo();
+		zodbbrowser.hideItemsIfTooMany();
+		$('#path a', element).click(function(event) {
+			event.stopPropagation();
+		});
+		$('#path', element).click(zodbbrowser.showGoTo);
+		$('#gotoInput', element).blur(zodbbrowser.hideGoTo);
+		$('#gotoInput', element).keypress(function(event) {
+			if (event.which === 13) { // enter
+				zodbbrowser.activateGoTo();
+			}
+		});
+		$('#gotoInput', element).keydown(function(event) {
+			if (event.keyCode === 27) { // escape
+				zodbbrowser.hideGoTo();
+			}
+		});
+		$(document).keypress(function(event) {
+			if (event.which === 103) { // lowercase g
+				if ($('#goto', element).is(':hidden')) {
+					zodbbrowser.showGoTo();
+					event.preventDefault();
 				}
-			});
-			$('#gotoInput', element).keydown(function(event) {
-				if (event.keyCode === 27) { // escape
-					zodbbrowser.hideGoTo();
+			}
+		});
+		$('input.rollbackbtn', element).click(zodbbrowser.pressRollback);
+		$('span.truncated', element).click(function(event) {
+			event.preventDefault();
+			const
+				placeholder = $(this),
+				id = placeholder.attr('id');
+			$.ajax({
+				url: 'zodbbrowser_truncated',
+				data: 'id=' + id,
+				success: function(data, status) {
+					placeholder.replaceWith(data);
 				}
-			});
-			$(document).keypress(function(event) {
-				if (event.which === 103) { // lowercase g
-					if ($('#goto', element).is(':hidden')) {
-						zodbbrowser.showGoTo();
-						event.preventDefault();
-					}
-				}
-			});
-			$('input.rollbackbtn', element).click(zodbbrowser.pressRollback);
-			$('span.truncated', element).click(function(event) {
-				event.preventDefault();
-				const
-					placeholder = $(this),
-					id = placeholder.attr('id');
-				$.ajax({
-					url: 'zodbbrowser_truncated', data: 'id=' + id,
-					success: function(data, status) {
-						placeholder.replaceWith(data);
-					}
-				});
 			});
 		});
 	}

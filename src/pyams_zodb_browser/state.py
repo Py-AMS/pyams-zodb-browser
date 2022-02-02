@@ -18,6 +18,7 @@ import logging
 
 import zope.interface.declarations
 from ZODB.utils import u64
+from persistent import Persistent
 from persistent.dict import PersistentDict
 from persistent.list import PersistentList
 from persistent.mapping import PersistentMapping
@@ -31,6 +32,7 @@ from zope.interface.interfaces import IInterface
 from zope.traversing.interfaces import IContainmentRoot
 
 from pyams_utils.adapter import adapter_config
+from pyams_zodb_browser.history import get_object_history
 from pyams_zodb_browser.interfaces import IObjectHistory, IStateInterpreter
 
 
@@ -53,6 +55,11 @@ def install_provides_hack():
     not interfaces, and aren't iterable, causing TypeErrors during unpickling.
     """
     zope.interface.declarations.Provides = Provides
+
+
+def uninstall_provides_hack():
+    """Undo the monkey-patch installed by install_provides_hack()."""
+    zope.interface.declarations.Provides = real_Provides
 
 
 def flatten_interfaces(args):
@@ -87,7 +94,7 @@ class ZODBObjectState:
     def __init__(self, obj, tid=None, _history=None):
         self.obj = obj
         if _history is None:
-            _history = IObjectHistory(self.obj)
+            _history = get_object_history(self.obj)
         else:
             assert _history._obj is self.obj
         self.history = _history
@@ -98,16 +105,15 @@ class ZODBObjectState:
         self._load()
 
     def _load(self):
-        self.tid = self.history.last_change(self.requested_tid)
         try:
+            self.tid = self.history.last_change(self.requested_tid)
             self.pickled_state = self.history.load_state_pickle(self.tid)
             loaded_state = self.history.load_state(self.tid)
+            self.state = getMultiAdapter((self.obj, loaded_state, self.requested_tid),
+                                         IStateInterpreter)
         except Exception as e:  # pylint: disable=broad-except,invalid-name
             self.load_error = "%s: %s" % (e.__class__.__name__, e)
             self.state = LoadErrorState(self.load_error, self.requested_tid)
-        else:
-            self.state = getMultiAdapter((self.obj, loaded_state, self.requested_tid),
-                                         IStateInterpreter)
 
     def get_error(self):
         """Error getter"""
@@ -193,7 +199,8 @@ class LoadErrorState:
         return {}
 
 
-@adapter_config(required=(Interface, dict, None), provides=IStateInterpreter)
+@adapter_config(required=(Interface, dict, None),
+                provides=IStateInterpreter)
 class GenericState:
     """Most persistent objects represent their state as a dict."""
 
@@ -273,9 +280,14 @@ class SampleContainerState(GenericState):
         # OOBTree -- SampleContainer itself uses a plain Python dict, but
         # subclasses are supposed to overwrite the _newContainerData() method
         # and use something persistent.
-        loaded_state = IObjectHistory(data).load_state(self.tid)
-        return getMultiAdapter((data, loaded_state, self.tid),
-                               IStateInterpreter).list_items()
+        if isinstance(data, Persistent):
+            loaded_state = get_object_history(data).load_state(self.tid)
+            return getMultiAdapter((data, loaded_state, self.tid),
+                                   IStateInterpreter).list_items()
+        # haha of course there are SampleContainer subclasses out there
+        # that don't bother overriding _newContainerData() and use a
+        # non-persistent dict!
+        return list(data.items())
 
 
 @adapter_config(required=(OrderedContainer, dict, None),
@@ -298,10 +310,11 @@ class OrderedContainerState(GenericState):
             old_order_state = IObjectHistory(container._order).load_state(self.tid)
             container._order = PersistentList()
             container._order.__setstate__(old_order_state)
-        return list(container.items())
+        return container.items()
 
 
-@adapter_config(required=(ContainedProxy, tuple, None), provides=IStateInterpreter)
+@adapter_config(required=(ContainedProxy, tuple, None),
+                provides=IStateInterpreter)
 class ContainedProxyState(GenericState):
     """Container proxy state interpreter"""
 

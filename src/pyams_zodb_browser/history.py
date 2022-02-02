@@ -16,9 +16,7 @@
 
 __docformat__ = 'restructuredtext'
 
-import inspect
-
-from ZODB.interfaces import IConnection
+from ZODB.interfaces import IConnection, IStorageIteration
 from ZODB.utils import tid_repr
 from persistent import Persistent
 from zope.interface import implementer
@@ -28,7 +26,15 @@ from pyams_zodb_browser.cache import get_storage_tids
 from pyams_zodb_browser.interfaces import IDatabaseHistory, IObjectHistory
 
 
-@adapter_config(required=Persistent, provides=IObjectHistory)
+try:
+    from ZODB.mvccadapter import MVCCAdapterInstance
+except ImportError:  # pragma: no-cover
+    class MVCCAdapterInstance:
+        """Placeholder so we can register an adapter that will not be used."""
+
+
+@adapter_config(required=Persistent,
+                provides=IObjectHistory)
 class ZODBObjectHistory:
     """ZODB object history adapter"""
 
@@ -59,18 +65,7 @@ class ZODBObjectHistory:
         See the 'history' method of ZODB.interfaces.IStorage.
         """
         size = 999999999999  # "all of it"; ought to be sufficient
-        # NB: ClientStorage violates the interface by calling the last
-        # argument 'length' instead of 'size'.  To avoid problems we must
-        # use positional argument syntax here.
-        # NB: FileStorage in ZODB 3.8 has a mandatory second argument 'version'
-        # FileStorage in ZODB 3.9 doesn't accept a 'version' argument at all.
-        # This check is ugly, but I see no other options if I want to support
-        # both ZODB versions :(
-        if 'version' in inspect.getargspec(self._storage.history)[0]:
-            version = None
-            self._history = self._storage.history(self._oid, version, size)
-        else:
-            self._history = self._storage.history(self._oid, size=size)
+        self._history = self._storage.history(self._oid, size=size)
         self._index_by_tid()
 
     def _index_by_tid(self):
@@ -80,7 +75,12 @@ class ZODBObjectHistory:
     def __getitem__(self, item):
         if self._history is None:
             self._load()
-        return self._history[item]
+        d = dict(self._history[item])
+        if isinstance(d['user_name'], bytes):
+            d['user_name'] = d['user_name'].decode('UTF-8', 'replace')
+        if isinstance(d['description'], bytes):
+            d['description'] = d['description'].decode('UTF-8', 'replace')
+        return d
 
     def last_change(self, tid=None):
         """Get last change transaction id"""
@@ -115,14 +115,26 @@ class ZODBObjectHistory:
             self._obj._p_changed = True
 
 
-@adapter_config(context=IConnection, provides=IDatabaseHistory)
+def get_object_history(obj):
+    """Object history getter"""
+    assert isinstance(obj, Persistent)
+    history = IObjectHistory(obj, None)
+    if history is None:
+        # See LP: #1185175
+        history = ZODBObjectHistory(obj)
+    return history
+
+
+@adapter_config(required=IConnection,
+                provides=IDatabaseHistory)
 @implementer(IObjectHistory)
 class ZODBHistory:
 
     def __init__(self, connection):
         self._connection = connection
-        self._storage = connection._storage
+        self._storage = IStorageIteration(connection._storage)
         self._tids = get_storage_tids(self._storage)
+        self._iterators = []
 
     @property
     def tids(self):
@@ -131,12 +143,32 @@ class ZODBHistory:
     def __len__(self):
         return len(self._tids)
 
+    def _addcleanup(self, it):
+        self._iterators.append(it)
+        return it
+
+    def cleanup(self):
+        for it in self._iterators:
+            if hasattr(it, 'close'):
+                it.close()
+        self._iterators = []
+
     def __iter__(self):
-        return self._storage.iterator()
+        return self._addcleanup(self._storage.iterator())
 
     def __getitem__(self, index):
         if isinstance(index, slice):
+            assert index.step is None or index.step == 1
             tids = self._tids[index]
             if not tids:
                 return []
-            return self._storage.iterator(tids[0], tids[-1])
+            return self._addcleanup(self._storage.iterator(tids[0], tids[-1]))
+        tid = self._tids[index]
+        return next(self._addcleanup(self._storage.iterator(tid, tid)))
+
+
+@adapter_config(required=MVCCAdapterInstance,
+                provides=IStorageIteration)
+def get_iterable_storage(storage):
+    """MVCC adapter storage iteration adapter"""
+    return storage._storage

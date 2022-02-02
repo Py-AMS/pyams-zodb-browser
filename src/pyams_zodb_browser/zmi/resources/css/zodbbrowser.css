@@ -12,6 +12,10 @@ div.zodbbrowser > div {
   padding: 5px;
 }
 
+div.zodbbrowser pre {
+  color: #333;
+}
+
 div.heading {
   background-color: #aaffaa;
   border-bottom: 1px solid #00cc33;
@@ -80,7 +84,7 @@ div.zodbbrowser h2 {
 
 div.zodbbrowser h3 {
   font-size: 14px;
-  color: orange;
+  color: #9f6a00;
   margin: 2px;
 }
 
@@ -90,7 +94,7 @@ h3.expander {
 }
 
 h3.expander:hover {
-  background: #f8fff8;
+  background: #dfefdf;
 }
 
 h5.expander {

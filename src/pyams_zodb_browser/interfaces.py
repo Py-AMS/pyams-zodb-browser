@@ -81,6 +81,14 @@ class IDatabaseHistory(Interface):
         Each record provides ZODB.interfaces.an IStorageTransactionInformation.
         """
 
+    def cleanup(self):
+        """Clean up all resources that may be left over.
+
+        ZODB iterators keep the database file and read from it when
+        you access various bits of data.  When you're done doing all that,
+        be sure to invoke `cleanup()` so those files can be closed.
+        """
+
 
 class IValueRenderer(Interface):
     """Renderer of attribute values."""

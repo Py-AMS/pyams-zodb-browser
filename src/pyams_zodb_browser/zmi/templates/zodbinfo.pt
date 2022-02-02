@@ -89,6 +89,16 @@
 		</div>
 	</div>
 
+	<div class="pickle">
+		<h3 class="expander" data-ams-click-handler="MyAMS.zodbbrowser.collapseOrExpand">
+			<img src="/--static--/pyams_zodb_browser/img/expand.png"
+				 alt="expand" />&nbsp;Raw pickle data
+		</h3>
+		<div class="collapsible collapsed" style="display: none">
+		    <pre>${view.get_disassembled_pickle_data()}</pre>
+		</div>
+	</div>
+
 	<div class="history"
 		 tal:define="history view.list_history()"
 		 tal:condition="history">
