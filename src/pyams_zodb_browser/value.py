@@ -10,7 +10,7 @@
 # FOR A PARTICULAR PURPOSE.
 #
 
-"""PyAMS_*zodb_browser.value module
+"""PyAMS_zodb_browser.value module
 
 """
 
@@ -31,7 +31,7 @@ from zope.interface.declarations import ProvidesClass
 
 from pyams_utils.adapter import adapter_config
 from pyams_zodb_browser.history import get_object_history
-from pyams_zodb_browser.interfaces import IObjectHistory, IValueRenderer
+from pyams_zodb_browser.interfaces import IValueRenderer
 
 
 # Persistent has a __repr__ now that shows the OID, but it's shown poorly
