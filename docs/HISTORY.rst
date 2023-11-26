@@ -1,11 +1,11 @@
 Changelog
 =========
 
-2.0.2
+2.0.1
 -----
  - updated package configuration
 
-2.0.1
+2.0.0
 -----
  - upgraded to Pyramid 2.0
 
