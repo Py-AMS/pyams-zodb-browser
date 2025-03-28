@@ -218,10 +218,12 @@ class TupleValue:
         return result
 
 
-@adapter_config(required=list, provides=IValueRenderer)
-class ListValue:
-    """List renderer."""
+class IteratorValue:
+    """Generic iterator renderer"""
 
+    open_marker = '['
+    close_marker = ']'
+    
     def __init__(self, context):
         self.context = context
 
@@ -230,10 +232,23 @@ class ListValue:
         html = []
         for item in self.context:
             html.append(IValueRenderer(item).render(tid, can_link))
-        result = '[%s]' % ', '.join(html)
+        result = f"{self.open_marker}{', '.join(html)}{self.close_marker}"
         if len(result) > threshold or '<span class="struct">' in result:
-            return join_with_commas(html, '[', ']')
+            return join_with_commas(html, self.open_marker, self.close_marker)
         return result
+
+    
+@adapter_config(required=list, provides=IValueRenderer)
+class ListValue(IteratorValue):
+    """List renderer"""
+
+
+@adapter_config(required=set, provides=IValueRenderer)
+class SetValue(IteratorValue):
+    """Set renderer"""
+    
+    open_marker = '{'
+    close_marker = '}'
 
 
 @adapter_config(required=dict, provides=IValueRenderer)
