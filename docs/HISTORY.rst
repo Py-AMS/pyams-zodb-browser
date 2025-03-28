@@ -1,6 +1,11 @@
 Changelog
 =========
 
+2.1.0
+-----
+ - added set value renderer
+ - added support for Python 3.12
+
 2.0.1
 -----
  - updated package configuration
